@@ -764,7 +764,7 @@ form.
    at the beginning of the string and not at the beginning of each line.
 
    If you want to locate a match anywhere in *string*, use :func:`search`
-   instead (see also :ref:`search-vs-match`).
+   instead (see also :ref:`search-vs-match-vs-fullmatch`).
 
 
 .. function:: fullmatch(pattern, string, flags=0)
@@ -1045,7 +1045,7 @@ attributes:
       <re.Match object; span=(1, 2), match='o'>
 
    If you want to locate a match anywhere in *string*, use
-   :meth:`~Pattern.search` instead (see also :ref:`search-vs-match`).
+   :meth:`~Pattern.search` instead (see also :ref:`search-vs-match-vs-fullmatch`).
 
 
 .. method:: Pattern.fullmatch(string[, pos[, endpos]])
@@ -1436,39 +1436,82 @@ The equivalent regular expression would be ::
    (\S+) - (\d+) errors, (\d+) warnings
 
 
-.. _search-vs-match:
+.. _search-vs-match-vs-fullmatch:
 
-search() vs. match()
-^^^^^^^^^^^^^^^^^^^^
+search() vs. match() vs. fullmatch()
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. sectionauthor:: Fred L. Drake, Jr. <fdrake@acm.org>
 
-Python offers two different primitive operations based on regular expressions:
-:func:`re.match` checks for a match only at the beginning of the string, while
-:func:`re.search` checks for a match anywhere in the string (this is what Perl
-does by default).
+Python offers three different primitive operations based on regular expressions:
+
+- :func:`re.search` checks for a match anywhere in the string.
+  (This is what Perl and :command:`grep` do by default.)
+- :func:`re.match` checks for a match starting only at the beginning of the string,
+  but can end before the end of a string.
+- :func:`re.fullmatch` (added in 3.4) checks for a match covering the whole string.
 
 For example::
 
-   >>> re.match("c", "abcdef")    # No match
-   >>> re.search("c", "abcdef")   # Match
+   >>> re.search("c", "abcdef")        # Match
    <re.Match object; span=(2, 3), match='c'>
+   >>> re.match("c", "abcdef")         # No match
+   >>> re.fullmatch("c", "abcdef")     # No match
 
-Regular expressions beginning with ``'^'`` can be used with :func:`search` to
-restrict the match at the beginning of the string::
+   >>> re.search("abc", "abcdef")      # Match
+   <re.Match object; span=(0, 3), match='abc'>
+   >>> re.match("abc", "abcdef")       # Match
+   <re.Match object; span=(0, 3), match='abc'>
+   >>> re.fullmatch("abc", "abcdef")   # No match
 
-   >>> re.match("c", "abcdef")    # No match
-   >>> re.search("^c", "abcdef")  # No match
-   >>> re.search("^a", "abcdef")  # Match
+   >>> re.search("a.*f", "abcdef")     # Match
+   <re.Match object; span=(0, 6), match='abcdef'>
+   >>> re.match("a.*f", "abcdef")      # Match
+   <re.Match object; span=(0, 6), match='abcdef'>
+   >>> re.fullmatch("a.*f", "abcdef")  # Match
+   <re.Match object; span=(0, 6), match='abcdef'>
+
+Regular expressions beginning with ``\A`` can be used with :func:`search` to
+"anchor" the match to the beginning of the string::
+
+   >>> re.match(r"c", "abcdef")     # No match
+   >>> re.search(r"\Ac", "abcdef")  # No match
+
+   >>> re.search(r"\Aa", "abcdef")  # Match
    <re.Match object; span=(0, 1), match='a'>
 
-Note however that in :const:`MULTILINE` mode :func:`match` only matches at the
-beginning of the string, whereas using :func:`search` with a regular expression
-beginning with ``'^'`` will match at the beginning of each line. ::
+Similarly regular expressions ending with ``\Z`` can be used to "anchor" the
+match to the end of the string::
 
-   >>> re.match('X', 'A\nB\nX', re.MULTILINE)  # No match
-   >>> re.search('^X', 'A\nB\nX', re.MULTILINE)  # Match
-   <re.Match object; span=(4, 5), match='X'>
+   >>> re.fullmatch(r"d", "abcdef")     # No match
+   >>> re.search(r"\Ad\Z", "abcdef")    # No match
+
+   >>> re.fullmatch(r"def", "abcdef")   # No match
+   >>> re.search(r"\Adef\Z", "abcdef")  # No match
+
+   >>> re.search(r"def\Z", "abcdef")    # Match
+   <re.Match object; span=(3, 6), match='def'>
+
+The above techniques constrain matches at the very beginning/end of the string.
+
+Frequently, the string is multi-line text and you care about beginning/end of
+every line and not of whole text.  For that, use ``^``, ``$`` anchors in
+:const:`MULTILINE` mode:
+
+   >>> re.match(r'Last', 'First\nBest second\nLast', re.MULTILINE)     # No match
+   >>> re.search(r'\ALast', 'First\nBest second\nLast', re.MULTILINE)  # No match
+   >>> re.search(r'^Last', 'First\nBest second\nLast', re.MULTILINE)  # No match
+   >>> re.search(r'^Last', 'First\nBest second\nLast', re.MULTILINE)   # Match
+   <re.Match object; span=(18, 22), match='Last'>
+
+   >>> re.findall('.*st', 'First\nBest second\nLast', re.MULTILINE)    # 3 matches
+   ['First', 'Best', 'Last']
+   >>> re.findall('.*st$', 'First\nBest second\nLast', re.MULTILINE)   # 2 matches
+   ['First', 'Last']
+
+(This is what ``^`` and ``$`` mean by default in most editors and line-oriented
+tools like :command:`grep`; but in many programming languages including Python,
+you need to enable :const:`MULTILINE` mode.)
 
 
 Making a Phonebook
